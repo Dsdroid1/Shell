@@ -263,25 +263,41 @@ char** parseInput(char *commands,int *type)
 
 int wordcount(char *str)
 {
-	int words=0,space=1;
+	int words=0,space=1,isCommaOpen=0;
 	int i=0,len=strlen(str);
 	for(;i<len;i++)
 	{
-		if(space==1)
+		if(isCommaOpen==0)
 		{
-			if(str[i]!=' ')
+			if(str[i]=='"')
 			{
-				words++;
-				space=0;
+				isCommaOpen=1;
+			}
+			if(space==1)
+			{
+				if(str[i]!=' ')
+				{
+					words++;
+					space=0;
+				}
+			}
+			else
+			{
+				if(str[i]==' ')
+				{
+					space=1;
+				}	
+
 			}
 		}
 		else
 		{
-			if(str[i]==' ')
+			if(str[i]=='"')
 			{
-				space=1;
-			}	
+				isCommaOpen=0;
+			}
 		}
+		
 	}
 	return words;
 }
@@ -297,10 +313,12 @@ int executeCommand(char *command,int shouldParentWait,char *filepath)
 		i++;
 	}*/
 	int num_toks=wordcount(command);
+	printf("Expected Tokens:%d",num_toks);
+	int isString=0;
 	int i=0;
 	char **tokens=NULL;
 	tokens=(char **)malloc(sizeof(char *)*(num_toks+1));//+1 for NULL termination
-	char *temp;
+	char *temp,*temp2;
 	temp=strdup(command);
 	while(temp!=NULL&&temp[0]==' ')
 	{
@@ -308,12 +326,31 @@ int executeCommand(char *command,int shouldParentWait,char *filepath)
 	}
 	while(i<num_toks)
 	{
-		tokens[i++]=strsep(&temp," ");
-		//printf("\nToken identifed:%s",tokens[i-1]);
-		while(temp!=NULL&&temp[0]==' ')
+		temp2=strsep(&temp,"\"");
+		while(isString==0&&temp2!=NULL)
 		{
-			strsep(&temp," ");
+			tokens[i++]=strsep(&temp2," ");
+			//printf("\nToken identifed:%s",tokens[i-1]);
+			while(temp2!=NULL&&temp2[0]==' ')
+			{
+				strsep(&temp2," ");
+			}
+			if(temp2!=NULL&&strcmp(temp2,"")==0)
+			{
+				break;
+			}
 		}
+		if(isString==1)
+		{
+			tokens[i++]=strdup(temp2);
+			//printf("\nToken identifed:%s",tokens[i-1]);
+			while(temp!=NULL&&temp[0]==' ')
+			{
+				strsep(&temp," ");
+			}
+		}
+		isString=(isString==0)?1:0;
+
 	}
 	tokens[i]=NULL;
 	
@@ -363,6 +400,7 @@ int executeCommand(char *command,int shouldParentWait,char *filepath)
 			signal(SIGINT, SIG_DFL);
 			signal(SIGTSTP, SIG_DFL);
 			execvp(tokens[0],tokens);
+			//DO some thing to find if exec fails
 		}
 		else if(child_pid>0)
 		{
