@@ -28,6 +28,7 @@ as you do not need to use any features for this assignment that are supported by
 
 
 
+
 char** parseInput(char *commands,int *type)
 {
 	// This function will parse the input string into multiple commands or a single command with arguments depending on the delimiter (&&, ##, >, or spaces).
@@ -285,7 +286,7 @@ int wordcount(char *str)
 	return words;
 }
 
-int executeCommand(char *command,int shouldParentWait)
+int executeCommand(char *command,int shouldParentWait,char *filepath)
 {
 	//Return 0 on succes,-1 on 'exit'
 	// This function will fork a new process to execute a command
@@ -345,10 +346,20 @@ int executeCommand(char *command,int shouldParentWait)
 	}
 	else
 	{
+		int pipefd[2];
+		pipe(pipefd);
 		int child_pid=fork();
 		if(child_pid==0)
 		{
+			if(filepath!=NULL)
+			{
+				//output redirection
+				close(STDOUT_FILENO);
+				open(filepath,O_CREAT|O_RDWR,S_IRWXU);
+			}
+			
 			//child,restore default signals
+			
 			signal(SIGINT, SIG_DFL);
 			signal(SIGTSTP, SIG_DFL);
 			execvp(tokens[0],tokens);
@@ -365,18 +376,13 @@ int executeCommand(char *command,int shouldParentWait)
 	return 0;
 }
 
-int executeParallelCommands()
+int executeParallelCommands(char **commands)
 {
 	// This function will run multiple commands in parallel
-}
-
-int executeSequentialCommands(char **commands)
-{	
-	// This function will run multiple commands sequentially
 	int i=0,retval=0;
 	while(commands[i]!=NULL)
 	{
-		retval=executeCommand(commands[i++],1);
+		retval=executeCommand(commands[i++],0,NULL);
 		if(retval==-1)
 		{
 			break;
@@ -385,9 +391,61 @@ int executeSequentialCommands(char **commands)
 	return retval;
 }
 
-int executeCommandRedirection()
+int executeSequentialCommands(char **commands)
+{	
+	// This function will run multiple commands sequentially
+	int i=0,retval=0;
+	while(commands[i]!=NULL)
+	{
+		retval=executeCommand(commands[i++],1,NULL);
+		if(retval==-1)
+		{
+			break;
+		}
+	}
+	return retval;
+}
+
+int executeCommandRedirection(char *command)
 {
 	// This function will run a single command with output redirected to an output file specificed by user
+	char *cmd,*filepath;
+	int i=0,isCommaOpen=0,len=strlen(command),found=0;
+	for(i=0;i<len&&found==0;i++)
+	{
+		if(isCommaOpen==0)
+		{
+			if(command[i]=='"')
+			{
+				isCommaOpen=1;
+			}
+			else if(command[i]=='>')
+			{
+				//split to cmd,filepath
+				found=1;
+				command[i]='\0';
+				cmd=strdup(command);
+				filepath=strdup((&command[i])+1);
+				
+				
+				while(filepath!=NULL&&filepath[0]==' ')
+				{
+					strsep(&filepath," ");
+				}
+				//printf("filepath:%s",filepath);
+				//printf("\ncmd:%s",cmd);
+			}
+		}
+		else
+		{
+			if(command[i]='"')
+			{
+				isCommaOpen=0;
+			}
+		}
+		
+	}
+	executeCommand(cmd,1,filepath);
 }
 
 int main()
@@ -446,13 +504,13 @@ int main()
 		int shell_status=0;
 		
 		if(mode==1)
-			shell_status=executeParallelCommands();		// This function is invoked when user wants to run multiple commands in parallel (commands separated by &&)
+			shell_status=executeParallelCommands(split_commands);		// This function is invoked when user wants to run multiple commands in parallel (commands separated by &&)
 		else if(mode==2)
 			shell_status=executeSequentialCommands(split_commands);	// This function is invoked when user wants to run multiple commands sequentially (commands separated by ##)
 		else if(mode==3)
-			shell_status=executeCommandRedirection();	// This function is invoked when user wants redirect output of a single command to and output file specificed by user
+			shell_status=executeCommandRedirection(split_commands[0]);	// This function is invoked when user wants redirect output of a single command to and output file specificed by user
 		else if(mode==0)
-			shell_status=executeCommand(split_commands[0],1);		// This function is invoked when user wants to run a single commands
+			shell_status=executeCommand(split_commands[0],1,NULL);		// This function is invoked when user wants to run a single commands
 			
 		if(shell_status==-1)
 		{
