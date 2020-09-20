@@ -285,8 +285,9 @@ int wordcount(char *str)
 	return words;
 }
 
-void executeCommand(char **command)
+int executeCommand(char *command,int shouldParentWait)
 {
+	//Return 0 on succes,-1 on 'exit'
 	// This function will fork a new process to execute a command
 	//We will first tokenise it
 	/*int i=0;
@@ -294,12 +295,12 @@ void executeCommand(char **command)
 	{
 		i++;
 	}*/
-	int num_toks=wordcount(command[0]);
+	int num_toks=wordcount(command);
 	int i=0;
 	char **tokens=NULL;
 	tokens=(char **)malloc(sizeof(char *)*(num_toks+1));//+1 for NULL termination
 	char *temp;
-	temp=strdup(command[0]);
+	temp=strdup(command);
 	while(temp!=NULL&&temp[0]==' ')
 	{
 		strsep(&temp," ");
@@ -314,34 +315,77 @@ void executeCommand(char **command)
 		}
 	}
 	tokens[i]=NULL;
-	free(command[0]);
+	
 	free(command);
-	int child_pid=fork();
-	if(child_pid==0)
+	if(strcmp(tokens[0],"cd")==0)
 	{
-		//child,restore default signals
-		signal(SIGINT, SIG_DFL);
-		signal(SIGTSTP, SIG_DFL);
-		execvp(tokens[0],tokens);
+		int try_dir_change=-1;
+		char *path=NULL;
+		if(num_toks>1)
+		{
+			path=strdup(tokens[1]);
+			int i=2;
+			while(i<num_toks)
+			{
+				strcat(path," ");
+				strcat(path,tokens[i]);
+				i++;
+			}
+			try_dir_change=chdir(path);
+
+		}
+		if(try_dir_change==-1)
+		{
+			printf("Shell:Incorrect command\n");
+		}
 	}
-	else if(child_pid>0)
+	else if(strcmp(tokens[0],"exit")==0)
 	{
-		//in parent;
-		wait(NULL);
+		return -1;
 	}
+	else
+	{
+		int child_pid=fork();
+		if(child_pid==0)
+		{
+			//child,restore default signals
+			signal(SIGINT, SIG_DFL);
+			signal(SIGTSTP, SIG_DFL);
+			execvp(tokens[0],tokens);
+		}
+		else if(child_pid>0)
+		{
+			//in parent;
+			if(shouldParentWait==1)
+			{
+				wait(NULL);
+			}
+		}	
+	}
+	return 0;
 }
 
-void executeParallelCommands()
+int executeParallelCommands()
 {
 	// This function will run multiple commands in parallel
 }
 
-void executeSequentialCommands()
+int executeSequentialCommands(char **commands)
 {	
-	// This function will run multiple commands in parallel
+	// This function will run multiple commands sequentially
+	int i=0,retval=0;
+	while(commands[i]!=NULL)
+	{
+		retval=executeCommand(commands[i++],1);
+		if(retval==-1)
+		{
+			break;
+		}
+	}
+	return retval;
 }
 
-void executeCommandRedirection()
+int executeCommandRedirection()
 {
 	// This function will run a single command with output redirected to an output file specificed by user
 }
@@ -373,6 +417,7 @@ int main()
 		split_commands=parseInput(command,&mode);
 		free(command);
 		//Check if the first command is exit
+		/*
 		if(mode!=-1)
 		{
 			int i=0;
@@ -397,18 +442,23 @@ int main()
 				free(split_commands);
 				break;
 			}
-		}
-		
+		}*/
+		int shell_status=0;
 		
 		if(mode==1)
-			executeParallelCommands();		// This function is invoked when user wants to run multiple commands in parallel (commands separated by &&)
+			shell_status=executeParallelCommands();		// This function is invoked when user wants to run multiple commands in parallel (commands separated by &&)
 		else if(mode==2)
-			executeSequentialCommands();	// This function is invoked when user wants to run multiple commands sequentially (commands separated by ##)
+			shell_status=executeSequentialCommands(split_commands);	// This function is invoked when user wants to run multiple commands sequentially (commands separated by ##)
 		else if(mode==3)
-			executeCommandRedirection();	// This function is invoked when user wants redirect output of a single command to and output file specificed by user
+			shell_status=executeCommandRedirection();	// This function is invoked when user wants redirect output of a single command to and output file specificed by user
 		else if(mode==0)
-			executeCommand(split_commands);		// This function is invoked when user wants to run a single commands
+			shell_status=executeCommand(split_commands[0],1);		// This function is invoked when user wants to run a single commands
 			
+		if(shell_status==-1)
+		{
+			printf("Exiting shell...");
+			break;
+		}
 	}
 	
 	return 0;
