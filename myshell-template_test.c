@@ -319,7 +319,9 @@ void executeCommand(char **command)
 	int child_pid=fork();
 	if(child_pid==0)
 	{
-		//child
+		//child,restore default signals
+		signal(SIGINT, SIG_DFL);
+		signal(SIGTSTP, SIG_DFL);
 		execvp(tokens[0],tokens);
 	}
 	else if(child_pid>0)
