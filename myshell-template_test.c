@@ -568,7 +568,7 @@ int main()
 			
 		if(shell_status==-1)
 		{
-			printf("Exiting shell...");
+			printf("Exiting shell...\n");
 			break;
 		}
 	}
