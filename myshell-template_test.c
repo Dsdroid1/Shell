@@ -313,7 +313,7 @@ int executeCommand(char *command,int shouldParentWait,char *filepath)
 		i++;
 	}*/
 	int num_toks=wordcount(command);
-	printf("Expected Tokens:%d",num_toks);
+	//printf("Expected Tokens:%d",num_toks);
 	int isString=0;
 	int i=0;
 	char **tokens=NULL;
@@ -399,16 +399,32 @@ int executeCommand(char *command,int shouldParentWait,char *filepath)
 			
 			signal(SIGINT, SIG_DFL);
 			signal(SIGTSTP, SIG_DFL);
-			execvp(tokens[0],tokens);
+			close(pipefd[0]);//Read end
+			if(execvp(tokens[0],tokens)==-1)
+			{
+				//Means error occured,mem image not overwritten
+				write(pipefd[1],"error",strlen("error"));
+				//Using pipe to redirect op to parent ,if parent waits can be catched and error found!
+			}
+			exit(0);
 			//DO some thing to find if exec fails
 		}
 		else if(child_pid>0)
 		{
 			//in parent;
+			close(pipefd[1]);//Write end
 			if(shouldParentWait==1)
 			{
 				wait(NULL);
+				char isfail[10]={};
+				read(pipefd[0],isfail,10);
+				if(strlen(isfail)!=0)
+				{
+					printf("Shell:Incorrect command\n");
+				}
 			}
+			
+			
 		}	
 	}
 	return 0;
